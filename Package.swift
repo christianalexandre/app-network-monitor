@@ -1,26 +1,32 @@
-// swift-tools-version: 6.2
-// The swift-tools-version declares the minimum version of Swift required to build this package.
-
+// swift-tools-version: 5.9
 import PackageDescription
 
 let package = Package(
     name: "AppNetworkMonitor",
+    platforms: [
+        .iOS(.v15),
+    ],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "AppNetworkMonitor",
-            targets: ["AppNetworkMonitor"]
-        ),
+            targets: ["AppNetworkMonitor"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/kean/Pulse.git", from: "4.0.0"),
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "AppNetworkMonitor"
+            name: "AppNetworkMonitor",
+            dependencies: [
+                .product(name: "Pulse", package: "Pulse"),
+                .product(name: "PulseUI", package: "Pulse")
+            ],
+            swiftSettings: [
+                .define("DEBUG", .when(configuration: .debug))
+            ]
         ),
         .testTarget(
             name: "AppNetworkMonitorTests",
-            dependencies: ["AppNetworkMonitor"]
-        ),
+            dependencies: ["AppNetworkMonitor"]),
     ]
 )
