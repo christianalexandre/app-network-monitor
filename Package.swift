@@ -20,9 +20,6 @@ let package = Package(
             dependencies: [
                 .product(name: "Pulse", package: "Pulse"),
                 .product(name: "PulseUI", package: "Pulse")
-            ],
-            swiftSettings: [
-                .define("DEBUG", .when(configuration: .debug))
             ]
         ),
         .testTarget(
