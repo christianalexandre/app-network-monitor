@@ -3,6 +3,8 @@
 [![Platform](https://img.shields.io/badge/Platforms-iOS-blue.svg)](https://developer.apple.com/swift/)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 
+![App Network Monitor workflow example](./assets/app-network-example.svg)
+
 **AppNetworkMonitor** is a powerful, invasive network monitoring agent for iOS applications.
 
 Built on top of the amazing [Pulse](https://github.com/kean/Pulse) framework, this library goes a step further by injecting an **auto-instrumentation layer** into your app. It automatically intercepts, records, and streams network traffic (including WebSocket and standard HTTP/HTTPS), regardless of how your networking stack is configured.
@@ -84,6 +86,14 @@ That's it! The agent will now automatically:
 This library is designed to work with the [AppNetworkMonitor macOS Client](https://github.com/christianalexandre/app-network-monitor-client).
 - Ensure both devices are on the same Wi-Fi network.
 - The library uses Bonjour (_appmonitor._tcp) to auto-discover the desktop client.
+
+## Example Integration
+
+Want to see it in action? 
+
+Check out the **[FakeStore SwiftUI](https://github.com/christianalexandre/fakestore-swiftui)** sample project. 
+
+You can view **[this specific commit](https://github.com/christianalexandre/fakestore-swiftui/commit/9265fe07e8ae3239ff5b06baa7cf06b85b8d1054)** to see exactly which files need to be modified to integrate `AppNetworkMonitor` into an existing app.
 
 ## License
 This project is licensed under the MIT License - see the LICENSE file for details.
