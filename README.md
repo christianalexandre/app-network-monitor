@@ -87,6 +87,35 @@ This library is designed to work with the [AppNetworkMonitor macOS Client](https
 - Ensure both devices are on the same Wi-Fi network.
 - The library uses Bonjour (_appmonitor._tcp) to auto-discover the desktop client.
 
+## Running on Physical Devices
+
+To use **AppNetworkMonitor** on a physical iOS device and connect to the **Companion App**, your app requires **Local Network** and **Bonjour** permissions.
+
+To keep your production `Info.plist` clean, we recommend injecting these permissions strictly during **Debug/Development** builds using a Build Phase script.
+
+So, create a New Run Script Phase with the following script:
+
+```bash
+# Replace 'YOUR_DEBUG_SCHEMA' with your actual scheme (e.g., 'Debug', 'Development')
+if [ "${CONFIGURATION}" == "YOUR_DEBUG_SCHEMA" ]; then
+    echo "[AppNetworkMonitor] Injecting permissions..."
+    
+    # Target the Info.plist inside the compiled .app bundle
+    PLIST="${CODESIGNING_FOLDER_PATH}/Info.plist"
+
+    /usr/libexec/PlistBuddy -c "Delete :NSLocalNetworkUsageDescription" "$PLIST" 2>/dev/null
+    /usr/libexec/PlistBuddy -c "Add :NSLocalNetworkUsageDescription string 'AppNetworkMonitor - For the client connection'" "$PLIST"
+
+    /usr/libexec/PlistBuddy -c "Delete :NSBonjourServices" "$PLIST" 2>/dev/null
+    /usr/libexec/PlistBuddy -c "Add :NSBonjourServices array" "$PLIST"
+    /usr/libexec/PlistBuddy -c "Add :NSBonjourServices:0 string _appmonitor._tcp" "$PLIST"
+    
+    echo "[AppNetworkMonitor] Injection success!"
+else
+    echo "[AppNetworkMonitor] Skipped (Not a Debug build)."
+fi
+```
+
 ## Example Integration
 
 Want to see it in action? 
