@@ -1,6 +1,6 @@
 # AppNetworkMonitor
 
-[![Platform](https://img.shields.io/badge/Platform-iOS%2013.0%2B-blue.svg)](https://developer.apple.com/swift/)
+[![Platform](https://img.shields.io/badge/Platforms-iOS-blue.svg)](https://developer.apple.com/swift/)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 
 ![App Network Monitor workflow example](./assets/app-network-example.svg)
