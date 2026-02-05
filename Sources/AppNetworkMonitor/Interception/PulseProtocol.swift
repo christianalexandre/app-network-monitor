@@ -22,6 +22,7 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
     var receivedData = Data()
     var response: URLResponse?
     var startTime: Date?
+    var cachedBodyData: Data?
     
     override class func canInit(with request: URLRequest) -> Bool {
         guard let scheme = request.url?.scheme, ["http", "https"].contains(scheme) else { return false }
@@ -36,10 +37,12 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
     
     override func startLoading() {
         self.startTime = Date()
-        self.sendToSocket(state: .pending)
         
         guard let mutableRequest = (request as NSURLRequest).mutableCopy() as? NSMutableURLRequest else { return }
         URLProtocol.setProperty(true, forKey: "PulseHandled", in: mutableRequest)
+        
+        captureRequestBody(mutableRequest: mutableRequest)
+        self.sendToSocket(state: .pending)
         
         let finalRequest = mutableRequest as URLRequest
         self.dataTask = self.internalSession.dataTask(with: finalRequest)
@@ -48,6 +51,40 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
     
     override func stopLoading() {
         self.dataTask?.cancel()
+    }
+    
+    private func captureRequestBody(mutableRequest: NSMutableURLRequest) {
+        if let httpBody = request.httpBody, !httpBody.isEmpty {
+            self.cachedBodyData = httpBody
+            return
+        }
+        
+        if let stream = mutableRequest.httpBodyStream {
+            let data = readStream(stream)
+            if !data.isEmpty {
+                self.cachedBodyData = data
+                mutableRequest.httpBodyStream = InputStream(data: data)
+            }
+        }
+    }
+    
+    private func readStream(_ stream: InputStream) -> Data {
+        var data = Data()
+        let bufferSize = 4096
+        var buffer = [UInt8](repeating: 0, count: bufferSize)
+        
+        stream.open()
+        while stream.hasBytesAvailable {
+            let bytesRead = stream.read(&buffer, maxLength: bufferSize)
+            if bytesRead > 0 {
+                data.append(buffer, count: bytesRead)
+            } else {
+                break
+            }
+        }
+        stream.close()
+        
+        return data
     }
     
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
@@ -107,7 +144,7 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
         }
         
         let finalStatus = (state == .pending) ? 0 : statusCode
-        let reqBody = request.httpBody.flatMap { String(data: $0, encoding: .utf8) }
+        let reqBody = self.cachedBodyData.flatMap { String(data: $0, encoding: .utf8) }
         let resBody = (state == .completed) ? String(data: self.receivedData, encoding: .utf8) : nil
         let duration = Date().timeIntervalSince(self.startTime ?? Date())
         
