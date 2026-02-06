@@ -1,5 +1,5 @@
 //
-//  PulseBridge.swift
+//  AppNetworkMonitor.swift
 //  AppNetworkMonitor
 //
 //  Created by Christian Alexandre on 30/12/25.
@@ -8,8 +8,8 @@
 import Foundation
 import SwiftUI
 
-public class PulseBridge: @unchecked Sendable {
-    public static let shared = PulseBridge()
+public class AppNetworkMonitor: @unchecked Sendable {
+    public static let shared = AppNetworkMonitor()
     
     public func start() {
         SocketClient.shared.connect()

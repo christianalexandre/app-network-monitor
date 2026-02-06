@@ -63,7 +63,7 @@ struct YourApp: App {
         #if DEBUG
         // Starts the interception engine and attempts to connect 
         // to the macOS Client via Bonjour.
-        PulseBridge.shared.start() 
+        AppNetworkMonitor.shared.start() 
         #endif
     }
 

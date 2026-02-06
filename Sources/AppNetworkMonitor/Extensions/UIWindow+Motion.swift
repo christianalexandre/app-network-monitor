@@ -9,7 +9,7 @@ import SwiftUI
 
 extension UIWindow {
     open override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
-        if motion == .motionShake { PulseBridge.shared.presentConsole() }
+        if motion == .motionShake { AppNetworkMonitor.shared.presentConsole() }
         super.motionEnded(motion, with: event)
     }
 }
