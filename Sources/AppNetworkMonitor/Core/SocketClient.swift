@@ -14,11 +14,20 @@ final class SocketClient: @unchecked Sendable {
     private var connection: NWConnection?
     private var browser: NWBrowser?
     private let queue = DispatchQueue(label: "com.debug.socket")
-    private var isScanning = false
+    private let lock = NSLock()
+    private var _isScanning = false
+    
+    private var isScanning: Bool {
+        get { lock.withLock { _isScanning } }
+        set { lock.withLock { _isScanning = newValue } }
+    }
     
     func connect() {
-        guard connection?.state != .ready && !isScanning else { return }
-        startScanning()
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            guard self.connection?.state != .ready && !self.isScanning else { return }
+            self.startScanning()
+        }
     }
     
     private func startScanning() {
@@ -62,6 +71,9 @@ final class SocketClient: @unchecked Sendable {
                 self.scheduleRetry()
             case .waiting(let error):
                 print("[AppNetworkMonitor] Waiting... \(error.localizedDescription)")
+            case .cancelled:
+                print("[AppNetworkMonitor] Connection cancelled, reconnecting...")
+                self.scheduleRetry()
             default:
                 break
             }
@@ -80,20 +92,29 @@ final class SocketClient: @unchecked Sendable {
     }
     
     func send(log: LogModel) {
-        guard connection?.state == .ready else { return }
-        
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        
-        guard let data = try? encoder.encode(log) else { return }
-        
-        let message = NWProtocolFramer.Message(definition: AppNetworkProtocol.definition)
-        let context = NWConnection.ContentContext(identifier: "LogMessage", metadata: [message])
-        
-        connection?.send(content: data, contentContext: context, isComplete: true, completion: .contentProcessed { error in
-            if let error = error {
-                print("[AppNetworkMonitor] Send failure: \(error)")
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            guard self.connection?.state == .ready else {
+                print("[AppNetworkMonitor] Cannot send - not connected")
+                return
             }
-        })
+            
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            
+            guard let data = try? encoder.encode(log) else {
+                print("[AppNetworkMonitor] Failed to encode log")
+                return
+            }
+            
+            let message = NWProtocolFramer.Message(definition: AppNetworkProtocol.definition)
+            let context = NWConnection.ContentContext(identifier: "LogMessage", metadata: [message])
+            
+            self.connection?.send(content: data, contentContext: context, isComplete: true, completion: .contentProcessed { error in
+                if let error = error {
+                    print("[AppNetworkMonitor] Send failure: \(error)")
+                }
+            })
+        }
     }
 }

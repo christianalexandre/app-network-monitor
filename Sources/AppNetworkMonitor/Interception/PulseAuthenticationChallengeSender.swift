@@ -16,7 +16,7 @@ final class PulseAuthenticationChallengeSender: NSObject, URLAuthenticationChall
     }
     
     func use(_ credential: URLCredential, for challenge: URLAuthenticationChallenge) { completionHandler(.useCredential, credential) }
-    func continueWithoutCredential(for challenge: URLAuthenticationChallenge) { completionHandler(.useCredential, nil) }
+    func continueWithoutCredential(for challenge: URLAuthenticationChallenge) { completionHandler(.performDefaultHandling, nil) }
     func cancel(_ challenge: URLAuthenticationChallenge) { completionHandler(.cancelAuthenticationChallenge, nil) }
     func performDefaultHandling(for challenge: URLAuthenticationChallenge) { completionHandler(.performDefaultHandling, nil) }
     func rejectProtectionSpaceAndContinue(with challenge: URLAuthenticationChallenge) { completionHandler(.rejectProtectionSpace, nil) }

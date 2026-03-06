@@ -10,19 +10,52 @@ import Pulse
 
 final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDelegate, @unchecked Sendable {
     
-    private lazy var internalSession: URLSession = {
+    private var internalSession: URLSession?
+    private let lock = NSLock()
+    
+    let requestID = UUID()
+    private var _dataTask: URLSessionDataTask?
+    private var _receivedData = Data()
+    private var _response: URLResponse?
+    private var _startTime: Date?
+    private var _cachedBodyData: Data?
+    
+    private var dataTask: URLSessionDataTask? {
+        get { lock.withLock { _dataTask } }
+        set { lock.withLock { _dataTask = newValue } }
+    }
+    
+    private var receivedData: Data {
+        get { lock.withLock { _receivedData } }
+        set { lock.withLock { _receivedData = newValue } }
+    }
+    
+    private var response: URLResponse? {
+        get { lock.withLock { _response } }
+        set { lock.withLock { _response = newValue } }
+    }
+    
+    private var startTime: Date? {
+        get { lock.withLock { _startTime } }
+        set { lock.withLock { _startTime = newValue } }
+    }
+    
+    private var cachedBodyData: Data? {
+        get { lock.withLock { _cachedBodyData } }
+        set { lock.withLock { _cachedBodyData = newValue } }
+    }
+    
+    private func getOrCreateSession() -> URLSession {
+        if let session = internalSession {
+            return session
+        }
         let config = URLSessionConfiguration.ephemeral
         config.httpAdditionalHeaders = ["X-Pulse-Internal": "true"]
         config.protocolClasses = []
-        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
-    }()
-    
-    let requestID = UUID()
-    var dataTask: URLSessionDataTask?
-    var receivedData = Data()
-    var response: URLResponse?
-    var startTime: Date?
-    var cachedBodyData: Data?
+        let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        internalSession = session
+        return session
+    }
     
     override class func canInit(with request: URLRequest) -> Bool {
         guard let scheme = request.url?.scheme, ["http", "https"].contains(scheme) else { return false }
@@ -38,19 +71,25 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
     override func startLoading() {
         self.startTime = Date()
         
-        guard let mutableRequest = (request as NSURLRequest).mutableCopy() as? NSMutableURLRequest else { return }
+        guard let mutableRequest = (request as NSURLRequest).mutableCopy() as? NSMutableURLRequest else {
+            client?.urlProtocol(self, didFailWithError: NSError(domain: "PulseProtocol", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create mutable request"]))
+            return
+        }
         URLProtocol.setProperty(true, forKey: "PulseHandled", in: mutableRequest)
         
         captureRequestBody(mutableRequest: mutableRequest)
         self.sendToSocket(state: .pending)
         
         let finalRequest = mutableRequest as URLRequest
-        self.dataTask = self.internalSession.dataTask(with: finalRequest)
+        let session = getOrCreateSession()
+        self.dataTask = session.dataTask(with: finalRequest)
         self.dataTask?.resume()
     }
     
     override func stopLoading() {
         self.dataTask?.cancel()
+        self.internalSession?.invalidateAndCancel()
+        self.internalSession = nil
     }
     
     private func captureRequestBody(mutableRequest: NSMutableURLRequest) {
@@ -94,7 +133,7 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
     }
     
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        self.receivedData.append(data)
+        lock.withLock { _receivedData.append(data) }
         self.client?.urlProtocol(self, didLoad: data)
     }
     
