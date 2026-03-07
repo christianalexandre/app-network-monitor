@@ -16,10 +16,32 @@ final class SocketClient: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.debug.socket")
     private let lock = NSLock()
     private var _isScanning = false
+    private var _isRetrying = false
     
     private var isScanning: Bool {
-        get { lock.withLock { _isScanning } }
-        set { lock.withLock { _isScanning = newValue } }
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _isScanning
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _isScanning = newValue
+        }
+    }
+    
+    private var isRetrying: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _isRetrying
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _isRetrying = newValue
+        }
     }
     
     func connect() {
@@ -68,12 +90,12 @@ final class SocketClient: @unchecked Sendable {
                 print("[AppNetworkMonitor] Connected!")
             case .failed(let error):
                 print("[AppNetworkMonitor] Failure: \(error)")
-                self.scheduleRetry()
+                self.scheduleRetry(isLocalCancellation: false)
             case .waiting(let error):
                 print("[AppNetworkMonitor] Waiting... \(error.localizedDescription)")
             case .cancelled:
-                print("[AppNetworkMonitor] Connection cancelled, reconnecting...")
-                self.scheduleRetry()
+                print("[AppNetworkMonitor] Connection cancelled")
+                self.scheduleRetry(isLocalCancellation: false)
             default:
                 break
             }
@@ -82,11 +104,18 @@ final class SocketClient: @unchecked Sendable {
         connection?.start(queue: queue)
     }
     
-    private func scheduleRetry() {
-        connection?.cancel()
+    private func scheduleRetry(isLocalCancellation: Bool = false) {
+        guard !isRetrying else { return }
+        isRetrying = true
+        
+        if !isLocalCancellation {
+            connection?.cancel()
+        }
         connection = nil
         isScanning = false
+        
         queue.asyncAfter(deadline: .now() + 3) { [weak self] in
+            self?.isRetrying = false
             self?.connect()
         }
     }

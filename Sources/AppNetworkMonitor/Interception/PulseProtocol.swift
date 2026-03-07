@@ -10,7 +10,7 @@ import Pulse
 
 final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDelegate, @unchecked Sendable {
     
-    private var internalSession: URLSession?
+    private var _internalSession: URLSession?
     private let lock = NSLock()
     
     let requestID = UUID()
@@ -20,40 +20,96 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
     private var _startTime: Date?
     private var _cachedBodyData: Data?
     
+    private var internalSession: URLSession? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _internalSession
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _internalSession = newValue
+        }
+    }
+    
     private var dataTask: URLSessionDataTask? {
-        get { lock.withLock { _dataTask } }
-        set { lock.withLock { _dataTask = newValue } }
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _dataTask
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _dataTask = newValue
+        }
     }
     
     private var receivedData: Data {
-        get { lock.withLock { _receivedData } }
-        set { lock.withLock { _receivedData = newValue } }
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _receivedData
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _receivedData = newValue
+        }
     }
     
     private var response: URLResponse? {
-        get { lock.withLock { _response } }
-        set { lock.withLock { _response = newValue } }
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _response
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _response = newValue
+        }
     }
     
     private var startTime: Date? {
-        get { lock.withLock { _startTime } }
-        set { lock.withLock { _startTime = newValue } }
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _startTime
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _startTime = newValue
+        }
     }
     
     private var cachedBodyData: Data? {
-        get { lock.withLock { _cachedBodyData } }
-        set { lock.withLock { _cachedBodyData = newValue } }
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _cachedBodyData
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _cachedBodyData = newValue
+        }
     }
     
     private func getOrCreateSession() -> URLSession {
-        if let session = internalSession {
+        lock.lock()
+        defer { lock.unlock() }
+        
+        if let session = _internalSession {
             return session
         }
         let config = URLSessionConfiguration.ephemeral
         config.httpAdditionalHeaders = ["X-Pulse-Internal": "true"]
         config.protocolClasses = []
         let session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
-        internalSession = session
+        _internalSession = session
         return session
     }
     
@@ -133,7 +189,9 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
     }
     
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        lock.withLock { _receivedData.append(data) }
+        lock.lock()
+        _receivedData.append(data)
+        lock.unlock()
         self.client?.urlProtocol(self, didLoad: data)
     }
     
@@ -143,6 +201,10 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
         
         self.sendToSocket(state: .completed)
         self.saveToLocalPulse(data: self.receivedData, response: self.response, error: error)
+        
+        // Invalidate session to break retain cycle (URLSession retains its delegate)
+        self.internalSession?.finishTasksAndInvalidate()
+        self.internalSession = nil
     }
     
     func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
