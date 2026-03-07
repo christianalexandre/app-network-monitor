@@ -130,7 +130,12 @@ final class SocketClient: @unchecked Sendable {
     private func receiveNextMessage() {
         connection?.receiveMessage { [weak self] content, context, isComplete, error in
             guard let self = self else { return }
-            guard error == nil else { return }
+            
+            if let error = error {
+                print("[AppNetworkMonitor] Receive error: \(error)")
+                self.scheduleRetry()
+                return
+            }
             
             if let data = content, !data.isEmpty {
                 self.handleReceivedMessage(data)
@@ -165,7 +170,12 @@ final class SocketClient: @unchecked Sendable {
             case .log:
                 break
             }
-        } catch { }
+        } catch {
+            print("[AppNetworkMonitor] Failed to decode incoming socket message: \(error)")
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("[AppNetworkMonitor] Raw message data: \(jsonString)")
+            }
+        }
     }
     
     func send(log: LogModel) {
@@ -194,6 +204,10 @@ final class SocketClient: @unchecked Sendable {
         let message = NWProtocolFramer.Message(definition: AppNetworkProtocol.definition)
         let context = NWConnection.ContentContext(identifier: "SocketMessage", metadata: [message])
         
-        connection?.send(content: data, contentContext: context, isComplete: true, completion: .contentProcessed { _ in })
+        connection?.send(content: data, contentContext: context, isComplete: true, completion: .contentProcessed { sendError in
+            if let sendError = sendError {
+                print("[AppNetworkMonitor] Failed to send socket message: \(sendError)")
+            }
+        })
     }
 }

@@ -53,9 +53,8 @@ public struct MockRule: Codable, Hashable, Identifiable {
         }
         
         if path.contains("*") {
-            let pattern = path
-                .replacingOccurrences(of: ".", with: "\\.")
-                .replacingOccurrences(of: "*", with: ".*")
+            let escapedPath = NSRegularExpression.escapedPattern(for: path)
+            let pattern = escapedPath.replacingOccurrences(of: "\\*", with: ".*")
             
             if let regex = try? NSRegularExpression(pattern: "^\(pattern)$", options: []) {
                 let range = NSRange(urlPath.startIndex..., in: urlPath)

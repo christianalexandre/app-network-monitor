@@ -14,42 +14,50 @@ final class MockManager: @unchecked Sendable {
     private var _rules: [MockRule] = []
     
     private(set) var rules: [MockRule] {
-        get { lock.withLock { _rules } }
-        set { lock.withLock { _rules = newValue } }
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _rules
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _rules = newValue
+        }
     }
     
     private init() {}
     
     /// Adiciona uma nova regra de mock
     func addRule(_ rule: MockRule) {
-        lock.withLock {
-            _rules.removeAll { $0.id == rule.id }
-            _rules.append(rule)
-        }
+        lock.lock()
+        defer { lock.unlock() }
+        _rules.removeAll { $0.id == rule.id }
+        _rules.append(rule)
     }
     
     func removeRule(id: UUID) {
-        lock.withLock {
-            _rules.removeAll { $0.id == id }
-        }
+        lock.lock()
+        defer { lock.unlock() }
+        _rules.removeAll { $0.id == id }
     }
     
     func clearRules() {
-        lock.withLock {
-            _rules.removeAll()
-        }
+        lock.lock()
+        defer { lock.unlock() }
+        _rules.removeAll()
     }
     
     func syncRules(_ newRules: [MockRule]) {
-        lock.withLock {
-            _rules = newRules
-        }
+        lock.lock()
+        defer { lock.unlock() }
+        _rules = newRules
     }
     
     func findMatchingRule(for url: URL, method: String?) -> MockRule? {
-        return lock.withLock {
-            _rules.first { $0.matches(url: url, httpMethod: method) }
-        }
+        lock.lock()
+        defer { lock.unlock() }
+        return _rules.first { $0.matches(url: url, httpMethod: method) }
     }
     
     func hasMock(for request: URLRequest) -> Bool {
