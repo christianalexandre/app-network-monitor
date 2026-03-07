@@ -14,11 +14,42 @@ final class SocketClient: @unchecked Sendable {
     private var connection: NWConnection?
     private var browser: NWBrowser?
     private let queue = DispatchQueue(label: "com.debug.socket")
-    private var isScanning = false
+    private let lock = NSLock()
+    private var _isScanning = false
+    private var _isRetrying = false
+    
+    private var isScanning: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _isScanning
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _isScanning = newValue
+        }
+    }
+    
+    private var isRetrying: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _isRetrying
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _isRetrying = newValue
+        }
+    }
     
     func connect() {
-        guard connection?.state != .ready && !isScanning else { return }
-        startScanning()
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            guard self.connection?.state != .ready && !self.isScanning else { return }
+            self.startScanning()
+        }
     }
     
     private func startScanning() {
@@ -59,9 +90,12 @@ final class SocketClient: @unchecked Sendable {
                 print("[AppNetworkMonitor] Connected!")
             case .failed(let error):
                 print("[AppNetworkMonitor] Failure: \(error)")
-                self.scheduleRetry()
+                self.scheduleRetry(isLocalCancellation: false)
             case .waiting(let error):
                 print("[AppNetworkMonitor] Waiting... \(error.localizedDescription)")
+            case .cancelled:
+                print("[AppNetworkMonitor] Connection cancelled")
+                self.scheduleRetry(isLocalCancellation: false)
             default:
                 break
             }
@@ -70,30 +104,46 @@ final class SocketClient: @unchecked Sendable {
         connection?.start(queue: queue)
     }
     
-    private func scheduleRetry() {
-        connection?.cancel()
+    private func scheduleRetry(isLocalCancellation: Bool = false) {
+        guard !isRetrying else { return }
+        isRetrying = true
+        
+        if !isLocalCancellation {
+            connection?.cancel()
+        }
         connection = nil
         isScanning = false
+        
         queue.asyncAfter(deadline: .now() + 3) { [weak self] in
+            self?.isRetrying = false
             self?.connect()
         }
     }
     
     func send(log: LogModel) {
-        guard connection?.state == .ready else { return }
-        
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        
-        guard let data = try? encoder.encode(log) else { return }
-        
-        let message = NWProtocolFramer.Message(definition: AppNetworkProtocol.definition)
-        let context = NWConnection.ContentContext(identifier: "LogMessage", metadata: [message])
-        
-        connection?.send(content: data, contentContext: context, isComplete: true, completion: .contentProcessed { error in
-            if let error = error {
-                print("[AppNetworkMonitor] Send failure: \(error)")
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            guard self.connection?.state == .ready else {
+                print("[AppNetworkMonitor] Cannot send - not connected")
+                return
             }
-        })
+            
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            
+            guard let data = try? encoder.encode(log) else {
+                print("[AppNetworkMonitor] Failed to encode log")
+                return
+            }
+            
+            let message = NWProtocolFramer.Message(definition: AppNetworkProtocol.definition)
+            let context = NWConnection.ContentContext(identifier: "LogMessage", metadata: [message])
+            
+            self.connection?.send(content: data, contentContext: context, isComplete: true, completion: .contentProcessed { error in
+                if let error = error {
+                    print("[AppNetworkMonitor] Send failure: \(error)")
+                }
+            })
+        }
     }
 }
