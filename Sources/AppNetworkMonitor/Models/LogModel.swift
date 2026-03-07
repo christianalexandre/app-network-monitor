@@ -7,15 +7,19 @@
 
 import Foundation
 
-struct LogModel: Identifiable, Codable, Hashable {
-    let id: UUID
-    let timestamp: Date
-    let method: String
-    let url: String
-    let statusCode: Int
-    let duration: TimeInterval
-    let requestHeaders: [String: String]?
-    let responseHeaders: [String: String]?
-    let requestBody: String?
-    let responseBody: String?
+public struct LogModel: Identifiable, Codable, Hashable {
+    public let id: UUID
+    public let timestamp: Date
+    public let method: String
+    public let url: String
+    public let statusCode: Int
+    public let duration: TimeInterval
+    public let requestHeaders: [String: String]?
+    public let responseHeaders: [String: String]?
+    public let requestBody: String?
+    public let responseBody: String?
+    
+    public var isMocked: Bool {
+        return responseHeaders?["X-AppNetworkMonitor-Mocked"] == "true"
+    }
 }

@@ -88,6 +88,7 @@ final class SocketClient: @unchecked Sendable {
             switch state {
             case .ready:
                 print("[AppNetworkMonitor] Connected!")
+                self.startReceiving()
             case .failed(let error):
                 print("[AppNetworkMonitor] Failure: \(error)")
                 self.scheduleRetry(isLocalCancellation: false)
@@ -120,6 +121,53 @@ final class SocketClient: @unchecked Sendable {
         }
     }
     
+    // MARK: - Receiving Messages from Mac
+    
+    private func startReceiving() {
+        receiveNextMessage()
+    }
+    
+    private func receiveNextMessage() {
+        connection?.receiveMessage { [weak self] content, context, isComplete, error in
+            guard let self = self else { return }
+            guard error == nil else { return }
+            
+            if let data = content, !data.isEmpty {
+                self.handleReceivedMessage(data)
+            }
+            
+            if self.connection?.state == .ready {
+                self.receiveNextMessage()
+            }
+        }
+    }
+    
+    private func handleReceivedMessage(_ data: Data) {
+        do {
+            let message = try JSONDecoder().decode(SocketMessage.self, from: data)
+            
+            switch message.type {
+            case .addMockRule:
+                let rule = try JSONDecoder().decode(MockRule.self, from: message.payload)
+                MockManager.shared.addRule(rule)
+                
+            case .removeMockRule:
+                let id = try JSONDecoder().decode(UUID.self, from: message.payload)
+                MockManager.shared.removeRule(id: id)
+                
+            case .clearMockRules:
+                MockManager.shared.clearRules()
+                
+            case .syncMockRules:
+                let rules = try JSONDecoder().decode([MockRule].self, from: message.payload)
+                MockManager.shared.syncRules(rules)
+                
+            case .log:
+                break
+            }
+        } catch { }
+    }
+    
     func send(log: LogModel) {
         queue.async { [weak self] in
             guard let self = self else { return }
@@ -128,22 +176,24 @@ final class SocketClient: @unchecked Sendable {
                 return
             }
             
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            
-            guard let data = try? encoder.encode(log) else {
+            guard let socketMessage = try? SocketMessage.log(log) else {
                 print("[AppNetworkMonitor] Failed to encode log")
                 return
             }
             
-            let message = NWProtocolFramer.Message(definition: AppNetworkProtocol.definition)
-            let context = NWConnection.ContentContext(identifier: "LogMessage", metadata: [message])
-            
-            self.connection?.send(content: data, contentContext: context, isComplete: true, completion: .contentProcessed { error in
-                if let error = error {
-                    print("[AppNetworkMonitor] Send failure: \(error)")
-                }
-            })
+            self.sendSocketMessage(socketMessage)
         }
+    }
+    
+    private func sendSocketMessage(_ socketMessage: SocketMessage) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        
+        guard let data = try? encoder.encode(socketMessage) else { return }
+        
+        let message = NWProtocolFramer.Message(definition: AppNetworkProtocol.definition)
+        let context = NWConnection.ContentContext(identifier: "SocketMessage", metadata: [message])
+        
+        connection?.send(content: data, contentContext: context, isComplete: true, completion: .contentProcessed { _ in })
     }
 }

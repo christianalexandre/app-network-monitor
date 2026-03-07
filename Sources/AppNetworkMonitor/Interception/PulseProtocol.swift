@@ -134,12 +134,43 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
         URLProtocol.setProperty(true, forKey: "PulseHandled", in: mutableRequest)
         
         captureRequestBody(mutableRequest: mutableRequest)
+        
+        if let url = request.url,
+           let mockRule = MockManager.shared.findMatchingRule(for: url, method: request.httpMethod) {
+            handleMockedResponse(rule: mockRule, url: url)
+            return
+        }
+        
         self.sendToSocket(state: .pending)
         
         let finalRequest = mutableRequest as URLRequest
         let session = getOrCreateSession()
         self.dataTask = session.dataTask(with: finalRequest)
         self.dataTask?.resume()
+    }
+    
+    private func handleMockedResponse(rule: MockRule, url: URL) {
+        let (mockResponse, mockData) = MockManager.shared.createMockResponse(for: rule, url: url)
+        let delay = DispatchTimeInterval.milliseconds(rule.delayMs)
+        
+        DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self = self else { return }
+            
+            if let response = mockResponse {
+                self.response = response
+                self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            }
+            
+            if let data = mockData {
+                self.lock.withLock { self._receivedData = data }
+                self.client?.urlProtocol(self, didLoad: data)
+            }
+            
+            self.client?.urlProtocolDidFinishLoading(self)
+            
+            self.sendToSocket(state: .mocked)
+            self.saveToLocalPulse(data: mockData, response: mockResponse, error: nil)
+        }
     }
     
     override func stopLoading() {
@@ -225,7 +256,7 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
         completionHandler(request)
     }
     
-    private enum TaskState { case pending, completed }
+    private enum TaskState { case pending, completed, mocked }
     
     private func sendToSocket(state: TaskState) {
         let url = request.url?.absoluteString ?? "Unknown"
@@ -244,9 +275,14 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
             }
         }
         
+        if state == .mocked {
+            if resHeaders == nil { resHeaders = [:] }
+            resHeaders?["X-AppNetworkMonitor-Mocked"] = "true"
+        }
+        
         let finalStatus = (state == .pending) ? 0 : statusCode
         let reqBody = self.cachedBodyData.flatMap { String(data: $0, encoding: .utf8) }
-        let resBody = (state == .completed) ? String(data: self.receivedData, encoding: .utf8) : nil
+        let resBody = (state == .completed || state == .mocked) ? String(data: self.receivedData, encoding: .utf8) : nil
         let duration = Date().timeIntervalSince(self.startTime ?? Date())
         
         let log = LogModel(
