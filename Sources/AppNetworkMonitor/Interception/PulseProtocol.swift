@@ -19,6 +19,8 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
     private var _response: URLResponse?
     private var _startTime: Date?
     private var _cachedBodyData: Data?
+    private var _mockWorkItem: DispatchWorkItem?
+    private var _isCancelled = false
     
     private var internalSession: URLSession? {
         get {
@@ -98,6 +100,19 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
         }
     }
     
+    private var isCancelled: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _isCancelled
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _isCancelled = newValue
+        }
+    }
+    
     private func getOrCreateSession() -> URLSession {
         lock.lock()
         defer { lock.unlock() }
@@ -134,6 +149,13 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
         URLProtocol.setProperty(true, forKey: "PulseHandled", in: mutableRequest)
         
         captureRequestBody(mutableRequest: mutableRequest)
+        
+        if let url = request.url,
+           let mockRule = MockManager.shared.findMatchingRule(for: url, method: request.httpMethod) {
+            handleMockedResponse(rule: mockRule, url: url)
+            return
+        }
+        
         self.sendToSocket(state: .pending)
         
         let finalRequest = mutableRequest as URLRequest
@@ -142,7 +164,50 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
         self.dataTask?.resume()
     }
     
+    private func handleMockedResponse(rule: MockRule, url: URL) {
+        let (mockResponse, mockData) = MockManager.shared.createMockResponse(for: rule, url: url)
+        let delay = DispatchTimeInterval.milliseconds(rule.delayMs)
+        
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self, !self.isCancelled else { return }
+            
+            if let response = mockResponse {
+                self.response = response
+                self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            }
+            
+            guard !self.isCancelled else { return }
+            
+            if let data = mockData {
+                self.lock.lock()
+                self._receivedData = data
+                self.lock.unlock()
+                self.client?.urlProtocol(self, didLoad: data)
+            }
+            
+            guard !self.isCancelled else { return }
+            
+            self.client?.urlProtocolDidFinishLoading(self)
+            
+            self.sendToSocket(state: .mocked)
+            self.saveToLocalPulse(data: mockData, response: mockResponse, error: nil)
+        }
+        
+        lock.lock()
+        _mockWorkItem = workItem
+        lock.unlock()
+        
+        DispatchQueue.global().asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+    
     override func stopLoading() {
+        self.isCancelled = true
+        
+        lock.lock()
+        _mockWorkItem?.cancel()
+        _mockWorkItem = nil
+        lock.unlock()
+        
         self.dataTask?.cancel()
         self.internalSession?.invalidateAndCancel()
         self.internalSession = nil
@@ -225,7 +290,7 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
         completionHandler(request)
     }
     
-    private enum TaskState { case pending, completed }
+    private enum TaskState { case pending, completed, mocked }
     
     private func sendToSocket(state: TaskState) {
         let url = request.url?.absoluteString ?? "Unknown"
@@ -244,9 +309,14 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
             }
         }
         
+        if state == .mocked {
+            if resHeaders == nil { resHeaders = [:] }
+            resHeaders?["X-AppNetworkMonitor-Mocked"] = "true"
+        }
+        
         let finalStatus = (state == .pending) ? 0 : statusCode
         let reqBody = self.cachedBodyData.flatMap { String(data: $0, encoding: .utf8) }
-        let resBody = (state == .completed) ? String(data: self.receivedData, encoding: .utf8) : nil
+        let resBody = (state == .completed || state == .mocked) ? String(data: self.receivedData, encoding: .utf8) : nil
         let duration = Date().timeIntervalSince(self.startTime ?? Date())
         
         let log = LogModel(
