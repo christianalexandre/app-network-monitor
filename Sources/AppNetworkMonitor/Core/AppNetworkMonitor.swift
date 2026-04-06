@@ -20,14 +20,16 @@ public class AppNetworkMonitor: @unchecked Sendable {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let rootViewController = windowScene.windows.first?.rootViewController
         else { return }
-        if let presented = rootViewController.presentedViewController,
-           presented is UIHostingController<PulseContainerView> {
-            return
+
+        var topViewController = rootViewController
+        while let presented = topViewController.presentedViewController {
+            if presented is UIHostingController<PulseContainerView> { return }
+            topViewController = presented
         }
-        
+
         let consoleView = PulseContainerView()
         let hostingController = UIHostingController(rootView: consoleView)
         hostingController.modalPresentationStyle = .fullScreen
-        rootViewController.present(hostingController, animated: true)
+        topViewController.present(hostingController, animated: true)
     }
 }

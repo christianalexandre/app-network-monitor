@@ -39,7 +39,7 @@ extension URLSessionConfiguration {
     }
     
     @objc dynamic func swizzled_init() -> URLSessionConfiguration {
-        let config = self.swizzled_init() // init original
+        let config = self.swizzled_init()
         config.protocolClasses = [PulseProtocol.self] + (config.protocolClasses ?? [])
         return config
     }
