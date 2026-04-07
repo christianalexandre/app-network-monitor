@@ -1,4 +1,4 @@
-#if APPNETWORKMONITOR_ENABLED
+#if DEBUG
 //
 //  URLSession+Swizzling.swift
 //  AppNetworkMonitor
