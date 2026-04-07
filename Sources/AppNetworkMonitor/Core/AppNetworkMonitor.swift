@@ -16,7 +16,7 @@ public class AppNetworkMonitor: @unchecked Sendable {
         NetworkInterceptor.shared.start()
     }
     
-    @MainActor func presentConsole() {
+    @MainActor public func presentConsole() {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let rootViewController = windowScene.windows.first?.rootViewController
         else { return }

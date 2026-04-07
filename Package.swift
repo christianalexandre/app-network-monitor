@@ -9,6 +9,7 @@ let package = Package(
     products: [
         .library(
             name: "AppNetworkMonitor",
+            type: .dynamic,
             targets: ["AppNetworkMonitor"]),
     ],
     dependencies: [
