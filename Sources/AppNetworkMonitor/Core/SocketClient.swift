@@ -1,3 +1,4 @@
+#if APPNETWORKMONITOR_ENABLED
 //
 //  SocketClient.swift
 //  AppNetworkMonitor
@@ -211,3 +212,4 @@ final class SocketClient: @unchecked Sendable {
         })
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if APPNETWORKMONITOR_ENABLED
 //
 //  PulseAuthenticationChallengeSender.swift
 //  AppNetworkMonitor
@@ -21,3 +22,4 @@ final class PulseAuthenticationChallengeSender: NSObject, URLAuthenticationChall
     func performDefaultHandling(for challenge: URLAuthenticationChallenge) { completionHandler(.performDefaultHandling, nil) }
     func rejectProtectionSpaceAndContinue(with challenge: URLAuthenticationChallenge) { completionHandler(.rejectProtectionSpace, nil) }
 }
+#endif

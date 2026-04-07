@@ -1,3 +1,4 @@
+#if APPNETWORKMONITOR_ENABLED
 //
 //  AppNetworkProtocol.swift
 //  AppNetworkMonitor
@@ -50,3 +51,4 @@ class AppNetworkProtocol: NWProtocolFramerImplementation {
         try? framer.writeOutputNoCopy(length: messageLength)
     }
 }
+#endif

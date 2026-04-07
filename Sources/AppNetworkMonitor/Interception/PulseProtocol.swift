@@ -1,3 +1,4 @@
+#if APPNETWORKMONITOR_ENABLED
 //
 //  PulseProtocol.swift
 //  AppNetworkMonitor
@@ -339,3 +340,4 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
         LoggerStore.shared.storeRequest(request, response: response, error: error, data: data, metrics: nil)
     }
 }
+#endif

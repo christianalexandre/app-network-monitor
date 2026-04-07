@@ -1,3 +1,4 @@
+#if APPNETWORKMONITOR_ENABLED
 //
 //  MockRule.swift
 //  AppNetworkMonitor
@@ -109,3 +110,4 @@ public struct SocketMessage: Codable {
         return SocketMessage(type: .syncMockRules, payload: data)
     }
 }
+#endif

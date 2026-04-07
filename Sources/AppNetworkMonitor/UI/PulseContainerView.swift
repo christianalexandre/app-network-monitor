@@ -1,3 +1,4 @@
+#if APPNETWORKMONITOR_ENABLED
 //
 //  PulseContainerView.swift
 //  AppNetworkMonitor
@@ -16,3 +17,4 @@ struct PulseContainerView: View {
         }
     }
 }
+#endif
