@@ -1,4 +1,3 @@
-#if DEBUG
 //
 //  SocketClient.swift
 //  AppNetworkMonitor
@@ -212,4 +211,3 @@ final class SocketClient: @unchecked Sendable {
         })
     }
 }
-#endif

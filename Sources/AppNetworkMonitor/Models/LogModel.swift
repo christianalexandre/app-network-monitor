@@ -1,4 +1,3 @@
-#if DEBUG
 //
 //  LogModel.swift
 //  AppNetworkMonitor
@@ -24,4 +23,3 @@ public struct LogModel: Identifiable, Codable, Hashable {
         return responseHeaders?["X-AppNetworkMonitor-Mocked"] == "true"
     }
 }
-#endif

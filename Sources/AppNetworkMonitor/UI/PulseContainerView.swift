@@ -1,4 +1,3 @@
-#if DEBUG
 //
 //  PulseContainerView.swift
 //  AppNetworkMonitor
@@ -17,4 +16,3 @@ struct PulseContainerView: View {
         }
     }
 }
-#endif

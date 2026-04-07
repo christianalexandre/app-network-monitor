@@ -1,4 +1,3 @@
-#if DEBUG
 //
 //  MockManager.swift
 //  AppNetworkMonitor
@@ -85,4 +84,3 @@ final class MockManager: @unchecked Sendable {
         return (response, data)
     }
 }
-#endif

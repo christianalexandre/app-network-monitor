@@ -1,4 +1,3 @@
-#if DEBUG
 //
 //  URLSession+Swizzling.swift
 //  AppNetworkMonitor
@@ -45,5 +44,4 @@ extension URLSessionConfiguration {
         return config
     }
 }
-#endif
 

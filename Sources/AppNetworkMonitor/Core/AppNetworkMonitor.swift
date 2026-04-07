@@ -1,4 +1,3 @@
-#if DEBUG
 //
 //  AppNetworkMonitor.swift
 //  AppNetworkMonitor
@@ -34,4 +33,3 @@ public class AppNetworkMonitor: @unchecked Sendable {
         topViewController.present(hostingController, animated: true)
     }
 }
-#endif

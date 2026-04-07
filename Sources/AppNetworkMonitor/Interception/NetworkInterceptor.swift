@@ -1,4 +1,3 @@
-#if DEBUG
 //
 //  NetworkInterceptor.swift
 //  AppNetworkMonitor
@@ -67,4 +66,3 @@ final class NetworkInterceptor: @unchecked Sendable {
         method_exchangeImplementations(originalMethod, swizzledMethod)
     }
 }
-#endif
