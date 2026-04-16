@@ -1,13 +1,6 @@
-//
-//  URLSession+Swizzling.swift
-//  AppNetworkMonitor
-//
-//  Created by Christian Alexandre on 30/12/25.
-//
-
 import Foundation
 
-extension URLSession {
+internal extension URLSession {
     @objc dynamic func swizzled_init(configuration: URLSessionConfiguration, delegate: URLSessionDelegate?, delegateQueue: OperationQueue?) -> URLSession {
         if let headers = configuration.httpAdditionalHeaders as? [String: String], headers["X-Pulse-Internal"] == "true" {
             return self.swizzled_init(configuration: configuration, delegate: delegate, delegateQueue: delegateQueue)
@@ -25,15 +18,15 @@ extension URLSession {
     }
 }
 
-extension URLSessionConfiguration {
-    @objc dynamic class var swizzled_default: URLSessionConfiguration {
-        let config = self.swizzled_default
+internal extension URLSessionConfiguration {
+    @objc dynamic class var swizzledDefault: URLSessionConfiguration {
+        let config = self.swizzledDefault
         config.protocolClasses = [PulseProtocol.self] + (config.protocolClasses ?? [])
         return config
     }
     
-    @objc dynamic class var swizzled_ephemeral: URLSessionConfiguration {
-        let config = self.swizzled_ephemeral
+    @objc dynamic class var swizzledEphemeral: URLSessionConfiguration {
+        let config = self.swizzledEphemeral
         config.protocolClasses = [PulseProtocol.self] + (config.protocolClasses ?? [])
         return config
     }
@@ -44,4 +37,3 @@ extension URLSessionConfiguration {
         return config
     }
 }
-

@@ -1,10 +1,3 @@
-//
-//  MockRule.swift
-//  AppNetworkMonitor
-//
-//  Created by Christian Alexandre on 06/03/26.
-//
-
 import Foundation
 
 public struct MockRule: Codable, Hashable, Identifiable {
@@ -37,7 +30,7 @@ public struct MockRule: Codable, Hashable, Identifiable {
         self.isEnabled = isEnabled
     }
     
-    func matches(url: URL, httpMethod: String?) -> Bool {
+    internal func matches(url: URL, httpMethod: String?) -> Bool {
         guard isEnabled else { return false }
         
         if let ruleMethod = method, let reqMethod = httpMethod {

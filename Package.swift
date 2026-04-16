@@ -4,16 +4,16 @@ import PackageDescription
 let package = Package(
     name: "AppNetworkMonitor",
     platforms: [
-        .iOS(.v15),
+        .iOS(.v15)
     ],
     products: [
         .library(
             name: "AppNetworkMonitor",
-            type: .dynamic,
-            targets: ["AppNetworkMonitor"]),
+            type: .static,
+            targets: ["AppNetworkMonitor"])
     ],
     dependencies: [
-        .package(url: "https://github.com/kean/Pulse.git", from: "4.0.0"),
+        .package(url: "https://github.com/kean/Pulse.git", exact: "4.2.7")
     ],
     targets: [
         .target(
@@ -25,6 +25,6 @@ let package = Package(
         ),
         .testTarget(
             name: "AppNetworkMonitorTests",
-            dependencies: ["AppNetworkMonitor"]),
+            dependencies: ["AppNetworkMonitor"])
     ]
 )

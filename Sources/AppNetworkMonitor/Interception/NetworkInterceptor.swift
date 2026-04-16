@@ -1,17 +1,10 @@
-//
-//  NetworkInterceptor.swift
-//  AppNetworkMonitor
-//
-//  Created by Christian Alexandre on 30/12/25.
-//
-
 import Foundation
 
-final class NetworkInterceptor: @unchecked Sendable {
-    static let shared = NetworkInterceptor()
+internal final class NetworkInterceptor: @unchecked Sendable {
+    internal static let shared = NetworkInterceptor()
     private var started = false
     
-    func start() {
+    internal func start() {
         guard !started else { return }
         started = true
         
@@ -26,20 +19,19 @@ final class NetworkInterceptor: @unchecked Sendable {
     }
     
     private func swizzleConfigurationGetters() {
-        let selectors = [
-            #selector(getter: URLSessionConfiguration.default),
-            #selector(getter: URLSessionConfiguration.ephemeral)
+        let mapping: [Selector: Selector] = [
+            #selector(getter: URLSessionConfiguration.default): #selector(getter: URLSessionConfiguration.swizzledDefault),
+            #selector(getter: URLSessionConfiguration.ephemeral): #selector(getter: URLSessionConfiguration.swizzledEphemeral)
         ]
-        for selector in selectors {
-            let swizzledSelector = Selector("swizzled_" + String(describing: selector))
-            guard let originalMethod = class_getClassMethod(URLSessionConfiguration.self, selector),
-                  let swizzledMethod = class_getClassMethod(URLSessionConfiguration.self, swizzledSelector) else { continue }
+        for (original, swizzled) in mapping {
+            guard let originalMethod = class_getClassMethod(URLSessionConfiguration.self, original),
+                  let swizzledMethod = class_getClassMethod(URLSessionConfiguration.self, swizzled) else { continue }
             method_exchangeImplementations(originalMethod, swizzledMethod)
         }
     }
     
     private func swizzleConfigurationInit() {
-        let selector = #selector(URLSessionConfiguration.init)
+        let selector = NSSelectorFromString("init")
         let swizzledSelector = #selector(URLSessionConfiguration.swizzled_init)
         guard let originalMethod = class_getInstanceMethod(URLSessionConfiguration.self, selector),
               let swizzledMethod = class_getInstanceMethod(URLSessionConfiguration.self, swizzledSelector) else { return }

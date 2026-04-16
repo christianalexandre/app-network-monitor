@@ -1,15 +1,8 @@
-//
-//  SocketClient.swift
-//  AppNetworkMonitor
-//
-//  Created by Christian Alexandre on 30/12/25.
-//
-
 import Network
 import Foundation
 
-final class SocketClient: @unchecked Sendable {
-    static let shared = SocketClient()
+internal final class SocketClient: @unchecked Sendable {
+    internal static let shared = SocketClient()
     
     private var connection: NWConnection?
     private var browser: NWBrowser?
@@ -44,7 +37,7 @@ final class SocketClient: @unchecked Sendable {
         }
     }
     
-    func connect() {
+    internal func connect() {
         queue.async { [weak self] in
             guard let self = self else { return }
             guard self.connection?.state != .ready && !self.isScanning else { return }
@@ -59,7 +52,7 @@ final class SocketClient: @unchecked Sendable {
         let parameters = NWParameters.tcp
         parameters.includePeerToPeer = true
         let browser = NWBrowser(for: .bonjour(type: "_appmonitor._tcp", domain: nil), using: parameters)
-        browser.browseResultsChangedHandler = { [weak self] results, changes in
+        browser.browseResultsChangedHandler = { [weak self] results, _ in
             guard let self = self else { return }
 
             if let result = results.first {
@@ -128,7 +121,7 @@ final class SocketClient: @unchecked Sendable {
     }
     
     private func receiveNextMessage() {
-        connection?.receiveMessage { [weak self] content, context, isComplete, error in
+        connection?.receiveMessage { [weak self] content, _, _, error in
             guard let self = self else { return }
             
             if let error = error {
@@ -178,11 +171,10 @@ final class SocketClient: @unchecked Sendable {
         }
     }
     
-    func send(log: LogModel) {
+    internal func send(log: LogModel) {
         queue.async { [weak self] in
             guard let self = self else { return }
             guard self.connection?.state == .ready else {
-                print("[AppNetworkMonitor] Cannot send - not connected")
                 return
             }
             

@@ -1,19 +1,14 @@
-//
-//  PulseProtocol.swift
-//  AppNetworkMonitor
-//
-//  Created by Christian Alexandre on 30/12/25.
-//
-
 import Foundation
 import Pulse
 
-final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDelegate, @unchecked Sendable {
-    
+internal final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDelegate, @unchecked Sendable {
+
+    private static let maxBodySize = 10 * 1024 * 1024 // 10MB
+
     private var _internalSession: URLSession?
     private let lock = NSLock()
-    
-    let requestID = UUID()
+
+    internal let requestID = UUID()
     private var _dataTask: URLSessionDataTask?
     private var _receivedData = Data()
     private var _response: URLResponse?
@@ -21,7 +16,7 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
     private var _cachedBodyData: Data?
     private var _mockWorkItem: DispatchWorkItem?
     private var _isCancelled = false
-    
+
     private var internalSession: URLSession? {
         get {
             lock.lock()
@@ -34,7 +29,7 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
             _internalSession = newValue
         }
     }
-    
+
     private var dataTask: URLSessionDataTask? {
         get {
             lock.lock()
@@ -47,7 +42,7 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
             _dataTask = newValue
         }
     }
-    
+
     private var receivedData: Data {
         get {
             lock.lock()
@@ -60,7 +55,7 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
             _receivedData = newValue
         }
     }
-    
+
     private var response: URLResponse? {
         get {
             lock.lock()
@@ -73,7 +68,7 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
             _response = newValue
         }
     }
-    
+
     private var startTime: Date? {
         get {
             lock.lock()
@@ -86,7 +81,7 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
             _startTime = newValue
         }
     }
-    
+
     private var cachedBodyData: Data? {
         get {
             lock.lock()
@@ -99,7 +94,7 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
             _cachedBodyData = newValue
         }
     }
-    
+
     private var isCancelled: Bool {
         get {
             lock.lock()
@@ -112,11 +107,11 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
             _isCancelled = newValue
         }
     }
-    
+
     private func getOrCreateSession() -> URLSession {
         lock.lock()
         defer { lock.unlock() }
-        
+
         if let session = _internalSession {
             return session
         }
@@ -127,98 +122,98 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
         _internalSession = session
         return session
     }
-    
-    override class func canInit(with request: URLRequest) -> Bool {
+
+    override internal class func canInit(with request: URLRequest) -> Bool {
         guard let scheme = request.url?.scheme, ["http", "https"].contains(scheme) else { return false }
         if URLProtocol.property(forKey: "PulseHandled", in: request) != nil { return false }
-        if let urlString = request.url?.absoluteString, urlString.contains("_vvmonitor") { return false }
+        if let urlString = request.url?.absoluteString, urlString.contains("_appmonitor") { return false }
         return true
     }
-    
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+
+    override internal class func canonicalRequest(for request: URLRequest) -> URLRequest {
         return request
     }
-    
-    override func startLoading() {
+
+    override internal func startLoading() {
         self.startTime = Date()
-        
+
         guard let mutableRequest = (request as NSURLRequest).mutableCopy() as? NSMutableURLRequest else {
             client?.urlProtocol(self, didFailWithError: NSError(domain: "PulseProtocol", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create mutable request"]))
             return
         }
         URLProtocol.setProperty(true, forKey: "PulseHandled", in: mutableRequest)
-        
+
         captureRequestBody(mutableRequest: mutableRequest)
-        
+
         if let url = request.url,
            let mockRule = MockManager.shared.findMatchingRule(for: url, method: request.httpMethod) {
             handleMockedResponse(rule: mockRule, url: url)
             return
         }
-        
+
         self.sendToSocket(state: .pending)
-        
+
         let finalRequest = mutableRequest as URLRequest
         let session = getOrCreateSession()
         self.dataTask = session.dataTask(with: finalRequest)
         self.dataTask?.resume()
     }
-    
+
     private func handleMockedResponse(rule: MockRule, url: URL) {
         let (mockResponse, mockData) = MockManager.shared.createMockResponse(for: rule, url: url)
         let delay = DispatchTimeInterval.milliseconds(rule.delayMs)
-        
+
         let workItem = DispatchWorkItem { [weak self] in
             guard let self = self, !self.isCancelled else { return }
-            
+
             if let response = mockResponse {
                 self.response = response
                 self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             }
-            
+
             guard !self.isCancelled else { return }
-            
+
             if let data = mockData {
                 self.lock.lock()
                 self._receivedData = data
                 self.lock.unlock()
                 self.client?.urlProtocol(self, didLoad: data)
             }
-            
+
             guard !self.isCancelled else { return }
-            
+
             self.client?.urlProtocolDidFinishLoading(self)
-            
+
             self.sendToSocket(state: .mocked)
             self.saveToLocalPulse(data: mockData, response: mockResponse, error: nil)
         }
-        
+
         lock.lock()
         _mockWorkItem = workItem
         lock.unlock()
-        
+
         DispatchQueue.global().asyncAfter(deadline: .now() + delay, execute: workItem)
     }
-    
-    override func stopLoading() {
+
+    override internal func stopLoading() {
         self.isCancelled = true
-        
+
         lock.lock()
         _mockWorkItem?.cancel()
         _mockWorkItem = nil
         lock.unlock()
-        
+
         self.dataTask?.cancel()
         self.internalSession?.invalidateAndCancel()
         self.internalSession = nil
     }
-    
+
     private func captureRequestBody(mutableRequest: NSMutableURLRequest) {
         if let httpBody = request.httpBody, !httpBody.isEmpty {
             self.cachedBodyData = httpBody
             return
         }
-        
+
         if let stream = mutableRequest.httpBodyStream {
             let data = readStream(stream)
             if !data.isEmpty {
@@ -227,52 +222,60 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
             }
         }
     }
-    
+
     private func readStream(_ stream: InputStream) -> Data {
         var data = Data()
         let bufferSize = 4096
         var buffer = [UInt8](repeating: 0, count: bufferSize)
-        
+
         stream.open()
-        while stream.hasBytesAvailable {
+        defer { stream.close() }
+
+        while true {
             let bytesRead = stream.read(&buffer, maxLength: bufferSize)
             if bytesRead > 0 {
                 data.append(buffer, count: bytesRead)
+                if data.count > Self.maxBodySize { return data }
             } else {
                 break
             }
         }
-        stream.close()
-        
+
         return data
     }
-    
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+
+    // MARK: - URLSessionDataDelegate
+
+    internal func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
         self.response = response
         self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         completionHandler(.allow)
     }
-    
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+
+    internal func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         lock.lock()
         _receivedData.append(data)
         lock.unlock()
         self.client?.urlProtocol(self, didLoad: data)
     }
-    
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if let error = error { self.client?.urlProtocol(self, didFailWithError: error) }
-        else { self.client?.urlProtocolDidFinishLoading(self) }
-        
+
+    // MARK: - URLSessionTaskDelegate
+
+    internal func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error = error {
+            self.client?.urlProtocol(self, didFailWithError: error)
+        } else {
+            self.client?.urlProtocolDidFinishLoading(self)
+        }
+
         self.sendToSocket(state: .completed)
         self.saveToLocalPulse(data: self.receivedData, response: self.response, error: error)
-        
-        // Invalidate session to break retain cycle (URLSession retains its delegate)
+
         self.internalSession?.finishTasksAndInvalidate()
         self.internalSession = nil
     }
-    
-    func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+
+    internal func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         let pulseSender = PulseAuthenticationChallengeSender(completionHandler: completionHandler)
         let wrappedChallenge = URLAuthenticationChallenge(
             protectionSpace: challenge.protectionSpace,
@@ -284,21 +287,23 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
         )
         self.client?.urlProtocol(self, didReceive: wrappedChallenge)
     }
-    
-    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+
+    internal func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         self.client?.urlProtocol(self, wasRedirectedTo: request, redirectResponse: response)
-        completionHandler(request)
+        completionHandler(nil)
     }
-    
+
+    // MARK: - Helpers
+
     private enum TaskState { case pending, completed, mocked }
-    
+
     private func sendToSocket(state: TaskState) {
         let url = request.url?.absoluteString ?? "Unknown"
         let method = request.httpMethod ?? "GET"
         let reqHeaders = request.allHTTPHeaderFields
         var statusCode = 0
-        var resHeaders: [String: String]? = nil
-        
+        var resHeaders: [String: String]?
+
         if let httpResponse = self.response as? HTTPURLResponse {
             statusCode = httpResponse.statusCode
             resHeaders = [:]
@@ -308,17 +313,17 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
                 }
             }
         }
-        
+
         if state == .mocked {
             if resHeaders == nil { resHeaders = [:] }
             resHeaders?["X-AppNetworkMonitor-Mocked"] = "true"
         }
-        
+
         let finalStatus = (state == .pending) ? 0 : statusCode
         let reqBody = self.cachedBodyData.flatMap { String(data: $0, encoding: .utf8) }
         let resBody = (state == .completed || state == .mocked) ? String(data: self.receivedData, encoding: .utf8) : nil
         let duration = Date().timeIntervalSince(self.startTime ?? Date())
-        
+
         let log = LogModel(
             id: self.requestID,
             timestamp: self.startTime ?? Date(),
@@ -331,10 +336,10 @@ final class PulseProtocol: URLProtocol, URLSessionDataDelegate, URLSessionTaskDe
             requestBody: reqBody,
             responseBody: resBody
         )
-        
+
         SocketClient.shared.send(log: log)
     }
-    
+
     private func saveToLocalPulse(data: Data?, response: URLResponse?, error: Error?) {
         LoggerStore.shared.storeRequest(request, response: response, error: error, data: data, metrics: nil)
     }

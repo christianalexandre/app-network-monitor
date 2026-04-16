@@ -1,23 +1,16 @@
-//
-//  PulseAuthenticationChallengeSender.swift
-//  AppNetworkMonitor
-//
-//  Created by Christian Alexandre on 30/12/25.
-//
-
 import Foundation
 
-final class PulseAuthenticationChallengeSender: NSObject, URLAuthenticationChallengeSender, @unchecked Sendable {
-    typealias CompletionHandler = (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+internal final class PulseAuthenticationChallengeSender: NSObject, URLAuthenticationChallengeSender, @unchecked Sendable {
+    internal typealias CompletionHandler = (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     private let completionHandler: CompletionHandler
     
-    init(completionHandler: @escaping CompletionHandler) {
+    internal init(completionHandler: @escaping CompletionHandler) {
         self.completionHandler = completionHandler
     }
     
-    func use(_ credential: URLCredential, for challenge: URLAuthenticationChallenge) { completionHandler(.useCredential, credential) }
-    func continueWithoutCredential(for challenge: URLAuthenticationChallenge) { completionHandler(.performDefaultHandling, nil) }
-    func cancel(_ challenge: URLAuthenticationChallenge) { completionHandler(.cancelAuthenticationChallenge, nil) }
-    func performDefaultHandling(for challenge: URLAuthenticationChallenge) { completionHandler(.performDefaultHandling, nil) }
-    func rejectProtectionSpaceAndContinue(with challenge: URLAuthenticationChallenge) { completionHandler(.rejectProtectionSpace, nil) }
+    internal func use(_ credential: URLCredential, for challenge: URLAuthenticationChallenge) { completionHandler(.useCredential, credential) }
+    internal func continueWithoutCredential(for challenge: URLAuthenticationChallenge) { completionHandler(.performDefaultHandling, nil) }
+    internal func cancel(_ challenge: URLAuthenticationChallenge) { completionHandler(.cancelAuthenticationChallenge, nil) }
+    internal func performDefaultHandling(for challenge: URLAuthenticationChallenge) { completionHandler(.performDefaultHandling, nil) }
+    internal func rejectProtectionSpaceAndContinue(with challenge: URLAuthenticationChallenge) { completionHandler(.rejectProtectionSpace, nil) }
 }
